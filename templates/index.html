@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>News Parser</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #0f0f23; color: #e0e0e0; min-height: 100vh; }
+        .container { max-width: 900px; margin: 0 auto; padding: 40px 20px; }
+        h1 { text-align: center; margin-bottom: 10px; font-size: 2.2rem; color: #fff; }
+        .subtitle { text-align: center; color: #888; margin-bottom: 30px; }
+        .search-box { display: flex; gap: 12px; margin-bottom: 20px; }
+        .search-box input { flex: 1; padding: 14px 18px; border-radius: 10px; border: 1px solid #333; background: #1a1a2e; color: #fff; font-size: 1rem; }
+        .search-box input:focus { outline: none; border-color: #ff6b6b; }
+        .btn { background: #ff6b6b; color: #fff; border: none; padding: 14px 28px; border-radius: 10px; cursor: pointer; font-size: 1rem; font-weight: 600; transition: all 0.2s; }
+        .btn:hover { background: #ff5252; transform: translateY(-1px); }
+        .btn:disabled { background: #444; cursor: not-allowed; transform: none; }
+        .quick-topics { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 30px; justify-content: center; }
+        .topic-btn { background: #1a1a2e; border: 1px solid #333; color: #aaa; padding: 8px 16px; border-radius: 20px; cursor: pointer; font-size: 0.9rem; transition: all 0.2s; }
+        .topic-btn:hover { border-color: #ff6b6b; color: #ff6b6b; }
+        .topic-btn.active { background: #ff6b6b; color: #fff; border-color: #ff6b6b; }
+        .status { text-align: center; margin: 20px 0; color: #888; }
+        .articles { display: flex; flex-direction: column; gap: 16px; }
+        .article { background: #1a1a2e; border: 1px solid #222; border-radius: 12px; padding: 20px; transition: all 0.2s; }
+        .article:hover { border-color: #ff6b6b; transform: translateY(-2px); }
+        .article-title { font-size: 1.1rem; font-weight: 600; margin-bottom: 8px; }
+        .article-title a { color: #fff; text-decoration: none; }
+        .article-title a:hover { color: #ff6b6b; }
+        .article-meta { display: flex; gap: 16px; color: #666; font-size: 0.85rem; }
+        .article-source { color: #ff6b6b; }
+        .empty { text-align: center; padding: 60px 20px; color: #555; }
+        .count { text-align: center; color: #ff6b6b; margin-bottom: 20px; font-size: 0.95rem; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📰 News Parser</h1>
+        <p class="subtitle">Найди новости по любой теме</p>
+
+        <div class="quick-topics" id="topics">
+            <button class="topic-btn" data-topic="ai">🤖 AI</button>
+            <button class="topic-btn" data-topic="technology">💻 Технологии</button>
+            <button class="topic-btn" data-topic="crypto">₿ Крипто</button>
+            <button class="topic-btn" data-topic="startup">🚀 Стартапы</button>
+            <button class="topic-btn" data-topic="programming">👨‍💻 Программирование</button>
+        </div>
+
+        <div class="search-box">
+            <input type="text" id="topicInput" placeholder="Введи тему (например: machine learning)">
+            <button class="btn" id="searchBtn">Найти</button>
+        </div>
+
+        <div class="status" id="status"></div>
+        <div class="count" id="count"></div>
+        <div class="articles" id="articles">
+            <div class="empty">Выбери тему или введи запрос</div>
+        </div>
+    </div>
+
+    <script>
+        const topicInput = document.getElementById('topicInput');
+        const searchBtn = document.getElementById('searchBtn');
+        const status = document.getElementById('status');
+        const count = document.getElementById('count');
+        const articles = document.getElementById('articles');
+        const topics = document.querySelectorAll('.topic-btn');
+
+        let activeTopic = '';
+
+        topics.forEach(btn => {
+            btn.addEventListener('click', () => {
+                topics.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                activeTopic = btn.dataset.topic;
+                topicInput.value = '';
+                search();
+            });
+        });
+
+        searchBtn.addEventListener('click', search);
+        topicInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') search();
+        });
+
+        async function search() {
+            const topic = topicInput.value.trim() || activeTopic;
+            if (!topic) return;
+
+            status.textContent = 'Загружаю новости...';
+            count.textContent = '';
+            articles.innerHTML = '';
+            searchBtn.disabled = true;
+
+            try {
+                const res = await fetch('/parse', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ topic })
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    status.textContent = '';
+                    count.textContent = `Найдено: ${data.count} новостей`;
+
+                    if (data.articles.length === 0) {
+                        articles.innerHTML = '<div class="empty">Ничего не найдено</div>';
+                        return;
+                    }
+
+                    articles.innerHTML = data.articles.map(a => `
+                        <div class="article">
+                            <div class="article-title"><a href="${a.link}" target="_blank">${a.title}</a></div>
+                            <div class="article-meta">
+                                <span class="article-source">${a.source}</span>
+                                <span>${a.published}</span>
+                            </div>
+                        </div>
+                    `).join('');
+                } else {
+                    status.textContent = '❌ ' + data.error;
+                }
+            } catch (err) {
+                status.textContent = '❌ Ошибка соединения';
+            }
+
+            searchBtn.disabled = false;
+        }
+    </script>
+</body>
+</html>
